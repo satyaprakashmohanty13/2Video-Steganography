@@ -1,0 +1,6 @@
+__pycache__/
+.gradio/
+jules-scratch/
+venv/
+gradio.log
+keys/

@@ -1,133 +1,108 @@
-# This script is used to decode and decrypt the message from the encoded video
-
-'''
-Install dependencies:
-pip install -r requirements.txt
-
-Usage: 
-python decode.py <path_to_encoded_video>
-
-Example:
-python decode.py video.avi
-'''
-
 from stegano import lsb
 import cv2
 import os
-import sys
-import aesutil
 import shutil
-from termcolor import cprint 
-from pyfiglet import figlet_format
+import aesutil
 import rsautil1
+import ast
 
-os.system('cls' if os.name == 'nt' else 'clear')
-cprint(figlet_format('Team Byte', font='slant'),'yellow', attrs=['bold'])
-cprint(figlet_format('AES & RSA encrypted Video Steganography Decoder', font='digital'),'green', attrs=['bold'])
-ENCODED_VIDEO = sys.argv[1]
-temp_folder = "tmp2"
-frame_choice = int(input("1) Extract and enter frame numbers from image /n 2) Enter frame numbers manually : "))
-decoded = {}
-
-if frame_choice == 1:
-    ENCODED_IMAGE = input("/n Enter image name with extension : ")
-    res = lsb.reveal(ENCODED_IMAGE)
-    print(f"Encrypted frame numbers : {res}")
-    cprint("Select your encryption type \n 1) AES Encrypted {Symetric Encryption} \n 2) RSA Encrypted {Assysmetric Encryption}",'blue')
-    Encryption_Style=int(input(""))
-    if Encryption_Style == 1:
-        key = input("Enter the asymetric key to create AES key : ")
-        key_rsa = rsautil1.decrypt(message=key)
-        key_rsa = key_rsa.decode('utf-8')
-        print(f"Asymetric decrypted key \n {key_rsa}")
-        key123=int(input("Choose key type to decrypt image /n 1.HEX /n 2.ASCII : "))
-        key = input("Enter the key to decrypt image : ")
-        if key123==1:
-            msg = aesutil.decrypt(key=key,source=res)
-            msg1 = msg.decode('utf-8')
-            cprint(f"Decoded image : \n {msg}",'green')
-            FRAMES = list(map(int, input("Enter Above FRAME NUMBERS seperated by space: ").split()))
-       
-        else:
-            msg = aesutil.decrypt(key=key,source=res,keyType='ascii')
-            msg1 = msg.decode('utf-8')
-            cprint(f"Decoded image: \n {msg1}",'green')
-            FRAMES = list(map(int, input("Enter Above FRAME NUMBERS seperated by space: ").split()))
-    else :
-        cprint("Reading private key from keys folder and trying to decrypt",'red')
-        msg1 = rsautil1.decrypt(message=res)
-        msg1 = msg1.decode('utf-8')
-        cprint(f"Decoded image: \n {msg1}",'green')
-        FRAMES = list(map(int, input("Enter Above FRAME NUMBERS seperated by space: ").split()))
-   
-    
-else :
-    FRAMES = list(map(int, input("Enter FRAME NUMBERS seperated by space: ").split()))
-    cprint("Select your decryption type \n 1) AES Encrypted {Symetric Encryption} \n 2) RSA Encrypted {Assysmetric Encryption}",'blue')
-    Encryption_Style=int(input(""))
-    #print(FRAMES)
-
-def createTmp():
-    if not os.path.exists(temp_folder):
-        os.makedirs(temp_folder)
-
-def countFrames():
-    cap = cv2.VideoCapture(ENCODED_VIDEO)
-    length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    return length
-
-def decodeVideo(number_of_frames):
-    # First get the frame
-    cap = cv2.VideoCapture(ENCODED_VIDEO)
-    frame_number = -1
-    while(frame_number<=number_of_frames):
-        frame_number += 1
-        frame_file_name = os.path.join(temp_folder,f"{frame_number}.png")
-        encoded_frame_file_name = os.path.join(temp_folder,f"{frame_number}-enc.png")
-        # print(f"Frame number {frame_number}")
-        ret, frame = cap.read()
-
-        if frame_number in FRAMES:
-            cv2.imwrite(encoded_frame_file_name,frame)
-            clear_message = lsb.reveal(encoded_frame_file_name)
-            decoded[frame_number] = clear_message
-            cprint(f"Frame {frame_number} DECODED: {clear_message}",'blue')
-
-def clean_tmp(path="./tmp2"):
+def clean_tmp(path="tmp"):
     if os.path.exists(path):
         shutil.rmtree(path)
-        cprint("[INFO] tmp files are cleaned up",'green')
+        print(f"[INFO] {path} files are cleaned up")
 
-def arrangeAndDecrypt():
-    res=""
-    if Encryption_Style == 1:
-        
-        for fn in FRAMES:
-            res = res + decoded[fn]
-        cprint(f"Final string: {res}",'green')
-        key123=int(input("Choose key type /n 1.HEX /n 2.ASCII : "))
-        key = input("Enter the key : ")
-        if key123==1:
-            msg = aesutil.decrypt(key=key,source=res)
-            msg1 = msg.decode('utf-8')
-            cprint(f"Decoded message: \n {msg}",'green')
-            clean_tmp()
-        else:
-            msg = aesutil.decrypt(key=key,source=res,keyType='ascii')
-            msg1 = msg.decode('utf-8')
-            cprint(f"Decoded message: \n {msg1}",'green')
-            clean_tmp()
-    else :
-        for fn in FRAMES:
-            res = res + decoded[fn]
-        cprint(f"Final string: {res}",'green')
-        cprint("Reading private key from keys folder and trying to decrypt",'red')
-        msg1 = rsautil1.decrypt(message=res)
-        msg1 = msg1.decode('utf-8')
-        cprint(f"Decoded text: \n {msg1}",'green')
-        clean_tmp()
+def decode_process(encoded_video_path, decryption_style, encoded_image_path=None, frames_input=None, key=None, rsa_key_path=None):
+    temp_folder = "tmp_decode"
+    clean_tmp(temp_folder)
+    os.makedirs(temp_folder)
 
-createTmp()
-frames = countFrames()
-decodeVideo(frames)
-arrangeAndDecrypt()
+    frames = []
+
+    if encoded_image_path:
+        try:
+            encrypted_frames_str = lsb.reveal(encoded_image_path)
+            if not encrypted_frames_str:
+                raise ValueError("No hidden message found in the image.")
+
+            print(f"Encrypted frame numbers from image: {encrypted_frames_str}")
+
+            if decryption_style == 'AES':
+                if not key:
+                    raise ValueError("An AES key is required to decrypt frame numbers.")
+                decrypted_frames_str = aesutil.decrypt(key=key, source=encrypted_frames_str, keyType='ascii').decode('utf-8')
+            elif decryption_style == 'RSA':
+                if not rsa_key_path:
+                    raise ValueError("An RSA private key is required to decrypt frame numbers.")
+                decrypted_frames_str = rsautil1.decrypt(message=encrypted_frames_str, key_path=rsa_key_path).decode('utf-8')
+            else:
+                raise ValueError("Unsupported decryption type for frame numbers.")
+
+            frames = ast.literal_eval(decrypted_frames_str)
+            print(f"Decrypted frames: {frames}")
+
+        except Exception as e:
+            clean_tmp(temp_folder)
+            raise RuntimeError(f"Failed to decode frames from image: {e}")
+
+    elif frames_input:
+        try:
+            frames = [int(f.strip()) for f in frames_input.split(',')]
+        except ValueError:
+            raise ValueError("Frames must be a comma-separated list of numbers.")
+    else:
+        raise ValueError("Either an encoded image or manual frame numbers must be provided.")
+
+    cap = cv2.VideoCapture(encoded_video_path)
+    if not cap.isOpened():
+        clean_tmp(temp_folder)
+        raise IOError("Could not open the encoded video file.")
+
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    print(f"Total frames in video: {total_frames}")
+
+    decoded_parts = {}
+    frame_number = -1
+
+    while frame_number < total_frames:
+        frame_number += 1
+        ret, frame = cap.read()
+        if not ret:
+            break
+        if frame_number in frames:
+            frame_path = os.path.join(temp_folder, f"{frame_number}.png")
+            cv2.imwrite(frame_path, frame)
+
+            try:
+                clear_message = lsb.reveal(frame_path)
+                if clear_message:
+                    decoded_parts[frame_number] = clear_message
+                    print(f"Frame {frame_number} decoded: {clear_message}")
+                else:
+                    print(f"No message found in frame {frame_number}")
+            except Exception as e:
+                print(f"Could not decode frame {frame_number}: {e}")
+
+    cap.release()
+
+    sorted_decoded_parts = [decoded_parts[f] for f in sorted(frames) if f in decoded_parts]
+    encrypted_message = "".join(sorted_decoded_parts)
+
+    if not encrypted_message:
+        clean_tmp(temp_folder)
+        return "Failed to recover any message parts from the specified frames."
+
+    print(f"Full encrypted message: {encrypted_message}")
+
+    if decryption_style == 'AES':
+        if not key:
+            raise ValueError("AES key is required for decryption.")
+        decrypted_message = aesutil.decrypt(key=key, source=encrypted_message, keyType='ascii').decode('utf-8')
+    elif decryption_style == 'RSA':
+        if not rsa_key_path:
+            raise ValueError("RSA private key path is required for decryption.")
+        decrypted_message = rsautil1.decrypt(message=encrypted_message, key_path=rsa_key_path).decode('utf-8')
+    else:
+        raise ValueError("Invalid decryption style. Choose 'AES' or 'RSA'.")
+
+    clean_tmp(temp_folder)
+    return decrypted_message
